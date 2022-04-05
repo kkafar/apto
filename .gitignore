@@ -1,0 +1,14 @@
+# judge program
+#
+judge/
+
+# vscode config
+#
+.vscode
+
+# intelij / clion
+.idea
+
+# input / output
+#
+data/
