@@ -1,4 +1,4 @@
-.TARGET: build
+.TARGET: all
 
 SRC_PATH = src/main/cpp
 BIN_PATH = build/bin
@@ -11,6 +11,8 @@ LFLAGS = --std=c++11 -Wall
 SOURCES = $(wildcard $(SRC_PATH)/*.cpp)
 OBJECTS = $(addprefix $(OBJ_PATH)/,$(patsubst %.cpp,%.o,$(notdir $(SOURCES))))
 BIN_NAME = main
+
+all: build
 
 build: $(OBJECTS)
 	$(CXX) -o $(BIN_PATH)/$(BIN_NAME) $(LFLAGS) $^
