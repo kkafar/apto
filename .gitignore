@@ -12,5 +12,9 @@ judge/
 # input / output
 #
 data/
-
 build/
+
+# ??
+#
+*.pdf
+
