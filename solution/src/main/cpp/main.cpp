@@ -38,7 +38,6 @@ void bfs(Config &config) {
   while (!queue.empty()) {
 //    std::cout << "Iteration: " << i++ << ' ';
     std::pair<int, int> currentPosition = std::move(queue.front());
-//    std::pair<int, int> currentPosition = queue.back();
 //    std::cout << "Considered position: " << currentPosition.first << " " << currentPosition.second << '\n';
     queue.pop();
 
@@ -71,7 +70,7 @@ void bfs(Config &config) {
       config.board[currentPosition.first + 1][currentPosition.second].status = FieldStatus::Enqueued;
 
     }
-    if (currentPosition.first - 1 > 0 &&
+    if (currentPosition.first - 1 >= 0 &&
         config.board[currentPosition.first - 1][currentPosition.second].status == FieldStatus::Empty) {
 //      std::cout << "\tAdding " << currentPosition.first - 1 << " " << currentPosition.second << '\n';
       queue.emplace(currentPosition.first - 1, currentPosition.second);
@@ -85,7 +84,7 @@ void bfs(Config &config) {
       config.board[currentPosition.first][currentPosition.second + 1].parent = currentPosition;
       config.board[currentPosition.first][currentPosition.second + 1].status = FieldStatus::Enqueued;
     }
-    if (currentPosition.second - 1 > 0 &&
+    if (currentPosition.second - 1 >= 0 &&
         config.board[currentPosition.first][currentPosition.second - 1].status == FieldStatus::Empty) {
       queue.emplace(currentPosition.first, currentPosition.second - 1);
 //      std::cout << "\tAdding " << currentPosition.first << " " << currentPosition.second - 1 << '\n';
