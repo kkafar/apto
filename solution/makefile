@@ -21,7 +21,7 @@ $(OBJ_PATH)/%.o: $(SRC_PATH)/%.cpp
 	$(CXX) -o $(OBJ_PATH)/$(notdir $@) -c $^ $(CFLAGS)
 
 run: build
-	cat data/input/base-case.in | ./$(BIN_PATH)/$(BIN_NAME)
+	cat data/base-case.in | ./$(BIN_PATH)/$(BIN_NAME)
 
 clean:
 	rm -fv $(OBJ_PATH)/* $(BIN_PATH)/*

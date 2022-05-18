@@ -7,11 +7,19 @@
 
 constexpr static int MaxRobotCount = 3;
 
+
+void PrintPositions(const std::vector<std::pair<int, int>> &positions) {
+  for (std::size_t i = 0; i < positions.size(); ++i) {
+    std::cout << (char)(i + 'a') << " at pos: " << positions[i].first << ", " << positions[i].second << "\n";
+  }
+}
+
 enum FieldStatus {
   Visited, Empty, Blocked, Start, Finish, Enqueued
 };
 
 double inline squaredDistance(const std::pair<int, int> &positionOne, const std::pair<int, int> &positionTwo) {
+  std::cout << "Calculating distance between: " << positionOne.first << ", " << positionOne.second << " | " << positionTwo.first << ", " << positionTwo.second << '\n';
   return (positionOne.first - positionTwo.first) * (positionOne.first - positionTwo.first) +
       (positionOne.second - positionTwo.second) * (positionOne.second - positionTwo.second);
 }
@@ -21,6 +29,8 @@ struct BoardField {
 //  std::array<std::pair<int, int>, MaxRobotCount> parents;
   // rozważyć od razu uzupełnianie literkami (nie ma potrzeby potem tego odtwarzać)
   std::array<char, MaxRobotCount> parents;
+
+  bool hasRobot = false;
 
   void SetStatusForAll(FieldStatus &&status) {
     // rozważyć ręczne rozwinięcie tej pętli
@@ -54,7 +64,7 @@ struct BoardDims {
 struct Config {
   std::vector<std::vector<BoardField>> board;
   BoardDims dims;
-  std::vector<std::vector<char>> solution = std::vector<std::vector<char>>();
+  std::vector<std::string> solutions;
   std::vector<std::pair<int, int>> startPositions;
   std::vector<std::pair<int, int>> finishPositions;
   int robotCount;
@@ -69,6 +79,7 @@ struct Config {
     board.resize(dims.height);
     for (auto &vec : board) vec.resize(dims.width);
 
+    solutions.resize(robotCount);
     startPositions.resize(robotCount);
     finishPositions.resize(robotCount);
   }
@@ -77,6 +88,7 @@ struct Config {
 struct Case {
   std::vector<std::vector<BoardField>> board;
   std::vector<std::pair<int, int>> currentPositions;
+  std::vector<std::string> solutions;
   BoardDims dims;
   int time;
 };
@@ -98,7 +110,7 @@ struct MoveCombinationProvider {
     indices = std::vector<int>(moveCount);
     std::fill(begin(indices), end(indices), 0);
     currentPoss = 0;
-    possCount = std::pow(moves.size(), moveCount);
+    possCount = std::pow(moves.size(), moveCount) - 1;
   }
 
   inline bool HasNext() {
@@ -133,6 +145,21 @@ struct MoveCombinationProvider {
 
 };
 
+char MapMoveToChar(const std::pair<int, int> &move) {
+  if (move.first == 0) {
+    if (move.second == 1) return 'P';
+    else if (move.second == 0) return 'S';
+    else return 'L';
+  } else if (move.first == 1) {
+    return 'D';
+  } else if (move.first == -1) {
+    return 'G';
+  } else {
+    std::cout << "INVALID MOVE!!!!\n";
+    exit(1);
+  }
+}
+
 inline bool IsFinalPositionReached(const Case &currentCase, const Config &config) {
   for (std::size_t i = 0; i < currentCase.currentPositions.size(); ++i) {
     if (currentCase.currentPositions[i] != config.finishPositions[i]) return false;
@@ -142,48 +169,88 @@ inline bool IsFinalPositionReached(const Case &currentCase, const Config &config
 
 bool TryCommitMoves(const std::vector<std::pair<int, int>> &moves, Case &currCase, const Config &config) {
   int first, second;
-  for (int robotId = 0; (int)moves.size(); ++robotId) {
+  for (int robotId = 0; robotId < (int)moves.size(); ++robotId) {
+    std::cout << "Attemp to commit move for robot: " << (char)(robotId + 'a') << '\n';
     first = currCase.currentPositions[robotId].first + moves[robotId].first;
     second = currCase.currentPositions[robotId].second + moves[robotId].second;
+    std::cout << "\tpossible new pos: " << first << ", " << second << '\n';
     if ((first >= 0 && first < currCase.dims.height && second >= 0 && second < currCase.dims.width) &&
         (currCase.board[first][second].statuses[0] != FieldStatus::Blocked) && // 0 -- jak pole jest zablokowane, to jest zablokowane dla każdego robota
         (currCase.board[first][second].statuses[robotId] != FieldStatus::Visited))
+        // (!currCase.board[first][second].hasRobot))
         // (currCase.board[first][second].statuses[robotId] != FieldStatus::Enqueued)) // do przemyślenia
     {
       // próba wykonania ruchu
       currCase.currentPositions[robotId].first = first;
       currCase.currentPositions[robotId].second = second;
 
+
       // TODO: ustawianie parentów
 
       // sprawdzenie czy zasada odległości nie jest naruszona
-      for (int id = 0; (int)moves.size(); ++id) {
-        if (robotId != id && squaredDistance(currCase.currentPositions[robotId], currCase.currentPositions[id]) < config.minDistanceSquared) {
+      std::cout << "Size of moves vector: " << moves.size() << '\n';
+      for (int id = 0; id < (int)moves.size(); ++id) {
+        // std::cout << "robotId: " << robotId << ", id: " << id << '\n';
+        if (robotId != id && squaredDistance(currCase.currentPositions[robotId], currCase.currentPositions[id]) <= config.minDistanceSquared) {
+          std::cout << "\tRejected: Distance violated\n";
+          std::cout << "\t" << squaredDistance(currCase.currentPositions[robotId], currCase.currentPositions[id]) << " <= " << config.minDistanceSquared << '\n';
+          return false;
+        }
+        if (robotId != id && currCase.currentPositions[id] == currCase.currentPositions[robotId]) {
+          std::cout << "\tRejected: Tresspass\n";
           return false;
         }
       }
+      currCase.solutions[robotId].push_back(MapMoveToChar(moves[robotId]));
+      // currCase.board[first][second].hasRobot = true;
     } else {
+      std::cout << "\tRejected: ";
+      if ((first >= 0 && first < currCase.dims.height && second >= 0 && second < currCase.dims.width)) {
+        std::cout << "Move outside bounds\n";
+      } else if ((currCase.board[first][second].statuses[0] != FieldStatus::Blocked)) {
+        std::cout << "Blocked\n";
+      } else if ((currCase.board[first][second].statuses[robotId] != FieldStatus::Visited)) {
+        std::cout << "Visited\n";
+      } else if (!currCase.board[first][second].hasRobot) {
+        std::cout << "Occupied\n";
+      } else {
+        std::cout << "Rejected for no reason\n";
+      }
       return false;
     }
   }
+  std::cout << "Commited the moves\n";
   return true;
 }
 
 void bfs(Config &config) {
+  std::cout << "Starting bfs\n";
   // z configu stworzyć case
-  Case baseCase{std::move(config.board), config.startPositions, config.dims, 0};
+
+  std::cout << "Starting positions from config: \n";
+  PrintPositions(config.startPositions);
+
+  Case baseCase{std::move(config.board), config.startPositions, std::vector<std::string>(config.robotCount), config.dims, 0};
 
   // dodać go do kolejki
   std::queue<Case> queue;
   queue.push(std::move(baseCase));
 
   MoveCombinationProvider moveProvider(config.robotCount);
-  std::vector<std::pair<int, int>> currentMoves;
+  std::vector<std::pair<int, int>> currentMoves(config.robotCount);
 
   // zacząć przeglądać rozwiązania bfsem
   while (!queue.empty()) {
     Case currentCase = std::move(queue.front());
     queue.pop();
+
+    std::cout << "----------------------------------------------------\n";
+    std::cout << "Considering case:\n";
+    PrintPositions(currentCase.currentPositions);
+    std::cout << "time: " << currentCase.time << '\n';
+    std::cout << "time limit: " << config.timeLimit << '\n';
+    std::cout << "--------------------------\n";
+
 
     if (currentCase.time > config.timeLimit) return;
 
@@ -192,6 +259,10 @@ void bfs(Config &config) {
     if (IsFinalPositionReached(currentCase, config)) {
       // TODO: add logic here
       std::cout << "Final position reached!\n";
+      // for (auto &solution : currentCase.solutions) {
+      //   std::cout << solution << "\n";
+      // }
+      config.solutions = std::move(currentCase.solutions);
       return;
     }
 
@@ -207,14 +278,19 @@ void bfs(Config &config) {
 
     moveProvider.Reset();
     while (moveProvider.HasNext()) {
-      // UWAGA: TODO: TE RUCHY NIE BYŁY NIGDZIE WALIDOWANE JESZCZE
       moveProvider.NextInto(currentMoves);
+
+      std::cout << "Considering move: ";
+      for (auto &move : currentMoves) std::cout << move.first << ", " << move.second << " | ";
+      std::cout << std::endl;
 
       // teraz trzeba sprawdzić, czy ten ruch jest możliwy do wykonania:
       if (TryCommitMoves(currentMoves, currentCase, config)) {
+        std::cout << "\tAdded\n";
         Case newCase {
           currentCase.board,
           currentCase.currentPositions,
+          currentCase.solutions,
           currentCase.dims,
           currentCase.time + 1
         };
@@ -225,6 +301,7 @@ void bfs(Config &config) {
       std::copy(std::begin(basePositions), std::end(basePositions), std::begin(currentCase.currentPositions));
     }
   }
+  std::cout << "----------------------------------------------------\n";
 }
 
 Config loadInputFromStdIn();
@@ -234,9 +311,9 @@ int main(int argc, char * argv[]) {
   Config config = loadInputFromStdIn();
   bfs(config);
 
-  // for (auto i = config.solution.rbegin(); i != config.solution.rend(); ++i) {
-  //   std::cout << *i;
-  // }
+  for (auto &solution : config.solutions) {
+    std::cout << solution << "\n";
+  }
   return 0;
 }
 
@@ -259,6 +336,7 @@ Config loadInputFromStdIn() {
   // board
   for (int row = 0; row < config.dims.height; ++row) {
     std::cin >> lineBuffer;
+    std::cout << "Entered line: " << lineBuffer << '\n';
     for (int col = 0; col < config.dims.width; ++col) {
       if (lineBuffer[col] == '.') {
         config.board[row][col].SetStatusForAll(FieldStatus::Empty);
@@ -266,6 +344,7 @@ Config loadInputFromStdIn() {
         config.board[row][col].SetStatusForAll(FieldStatus::Blocked);
       } else if (lineBuffer[col] >= 'a' && lineBuffer[col] <= 'z') {
         char robotCharId = lineBuffer[col];
+        std::cout << "Detected robot " << robotCharId << " at position " << row << ", " << col << '\n';
         switch (robotCharId) {
           case 'a': {
             config.board[row][col].SetStatusesInorder(FieldStatus::Start, FieldStatus::Empty, FieldStatus::Empty);
@@ -282,15 +361,18 @@ Config loadInputFromStdIn() {
           default: {
             std::cout << "Robot with unrecognized id!\n";
           }
-          config.board[row][col].SetParentsForAll('X');
-          config.startPositions[robotCharId - 'a'] = {row, col};
         }
+        config.board[row][col].SetParentsForAll('X'); 
+        config.startPositions[robotCharId - 'a'] = {row, col};
       } else if (lineBuffer[col] >= 'A' && lineBuffer[col] <= 'Z') {
         char robotCharId = lineBuffer[col];
+        std::cout << "Detected final position for robot " << robotCharId << " at " << row << ", " << col << '\n';
         config.finishPositions[robotCharId - 'A'] = {row, col};
         config.board[row][col].SetStatusForAll(FieldStatus::Empty); // Todo: consider FieldStatus::Finish
       }
     }
   }
+  // std::cout << "Positions just after config was loaded\n";
+  // PrintPositions(config.startPositions);
   return config;
 }
