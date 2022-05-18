@@ -5,8 +5,8 @@ BIN_PATH = build/bin
 OBJ_PATH = build/obj
 
 CXX = g++
-CFLAGS = --std=c++11 -Wall
-LFLAGS = --std=c++11 -Wall
+CFLAGS = --std=c++14 -Wall
+LFLAGS = --std=c++14 -Wall
 
 SOURCES = $(wildcard $(SRC_PATH)/*.cpp)
 OBJECTS = $(addprefix $(OBJ_PATH)/,$(patsubst %.cpp,%.o,$(notdir $(SOURCES))))
