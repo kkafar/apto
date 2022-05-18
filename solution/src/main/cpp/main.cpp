@@ -9,6 +9,11 @@ enum FieldStatus {
   Visited, Empty, Blocked, Start, Finish, Enqueued
 };
 
+double inline squaredDistance(const std::pair<int, int> &positionOne, const std::pair<int, int> &positionTwo) {
+  return (positionOne.first - positionTwo.first) * (positionOne.first - positionTwo.first) +
+      (positionOne.second - positionTwo.second) * (positionOne.second - positionTwo.second);
+}
+
 struct BoardField {
   FieldStatus status;
   std::pair<int, int> parent;
