@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cmath>
 
-constexpr static int MaxBoardSize = 12;
 constexpr static int MaxRobotCount = 3;
 
 enum FieldStatus {
@@ -56,19 +55,16 @@ struct Config {
   std::vector<std::vector<BoardField>> board;
   BoardDims dims;
   std::vector<std::vector<char>> solution = std::vector<std::vector<char>>();
-  std::vector<char> solution = std::vector<char>();
   std::vector<std::pair<int, int>> startPositions;
   std::vector<std::pair<int, int>> finishPositions;
-  // std::array<std::pair<int, int>, MaxRobotCount> startPositions;
-  // std::array<std::pair<int, int>, MaxRobotCount> finishPosition;
   int robotCount;
-  double minDistance;
+  double minDistanceSquared;
   int timeLimit;
 
   Config(BoardDims dims, int robotCount, double minDistance, int timeLimit) : 
       dims(dims),
       robotCount(robotCount),
-      minDistance(minDistance),
+      minDistanceSquared(minDistance * minDistance),
       timeLimit(timeLimit) {
     board.resize(dims.height);
     for (auto &vec : board) vec.resize(dims.width);
@@ -144,6 +140,35 @@ inline bool IsFinalPositionReached(const Case &currentCase, const Config &config
   return true;
 }
 
+bool TryCommitMoves(const std::vector<std::pair<int, int>> &moves, Case &currCase, const Config &config) {
+  int first, second;
+  for (int robotId = 0; (int)moves.size(); ++robotId) {
+    first = currCase.currentPositions[robotId].first + moves[robotId].first;
+    second = currCase.currentPositions[robotId].second + moves[robotId].second;
+    if ((first >= 0 && first < currCase.dims.height && second >= 0 && second < currCase.dims.width) &&
+        (currCase.board[first][second].statuses[0] != FieldStatus::Blocked) && // 0 -- jak pole jest zablokowane, to jest zablokowane dla każdego robota
+        (currCase.board[first][second].statuses[robotId] != FieldStatus::Visited))
+        // (currCase.board[first][second].statuses[robotId] != FieldStatus::Enqueued)) // do przemyślenia
+    {
+      // próba wykonania ruchu
+      currCase.currentPositions[robotId].first = first;
+      currCase.currentPositions[robotId].second = second;
+
+      // TODO: ustawianie parentów
+
+      // sprawdzenie czy zasada odległości nie jest naruszona
+      for (int id = 0; (int)moves.size(); ++id) {
+        if (robotId != id && squaredDistance(currCase.currentPositions[robotId], currCase.currentPositions[id]) < config.minDistanceSquared) {
+          return false;
+        }
+      }
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
 void bfs(Config &config) {
   // z configu stworzyć case
   Case baseCase{std::move(config.board), config.startPositions, config.dims, 0};
@@ -170,66 +195,52 @@ void bfs(Config &config) {
       return;
     }
 
+    // najpierw oznaczamy wszystkie pola jako odwiedzone w tym casie'
+
+    for (int robotId = 0; robotId < config.robotCount; ++robotId) {
+      currentCase.board[currentCase.currentPositions[robotId].first][currentCase.currentPositions[robotId].second]
+          .SetStatusForRobot(robotId, FieldStatus::Visited);
+    }
+
+    std::vector<std::pair<int, int>> basePositions(config.robotCount);
+    std::copy(std::begin(currentCase.currentPositions), std::end(currentCase.currentPositions), std::begin(basePositions));
+
     moveProvider.Reset();
     while (moveProvider.HasNext()) {
       // UWAGA: TODO: TE RUCHY NIE BYŁY NIGDZIE WALIDOWANE JESZCZE
       moveProvider.NextInto(currentMoves);
-      // teraz tworzymy Case dla każdego przypadku
-      Case newCase {
-        currentCase.board,
-        currentCase.currentPositions,
-        currentCase.dims,
-        currentCase.time + 1
-      };
-      queue.push(std::move(newCase));
-    }
 
-    config.board[currentPosition.first][currentPosition.second].status = FieldStatus::Visited;
+      // teraz trzeba sprawdzić, czy ten ruch jest możliwy do wykonania:
+      if (TryCommitMoves(currentMoves, currentCase, config)) {
+        Case newCase {
+          currentCase.board,
+          currentCase.currentPositions,
+          currentCase.dims,
+          currentCase.time + 1
+        };
+        queue.push(std::move(newCase));
+      }
 
-
-
-    if (currentPosition.first + 1 < config.dims.height &&
-        config.board[currentPosition.first + 1][currentPosition.second].status == FieldStatus::Empty) {
-      queue.emplace(currentPosition.first + 1, currentPosition.second);
-      config.board[currentPosition.first + 1][currentPosition.second].parent = currentPosition;
-      config.board[currentPosition.first + 1][currentPosition.second].status = FieldStatus::Enqueued;
-
-    }
-    if (currentPosition.first - 1 >= 0 &&
-        config.board[currentPosition.first - 1][currentPosition.second].status == FieldStatus::Empty) {
-      queue.emplace(currentPosition.first - 1, currentPosition.second);
-      config.board[currentPosition.first - 1][currentPosition.second].parent = currentPosition;
-      config.board[currentPosition.first - 1][currentPosition.second].status = FieldStatus::Enqueued;
-    }
-    if (currentPosition.second + 1 < config.dims.width &&
-        config.board[currentPosition.first][currentPosition.second + 1].status == FieldStatus::Empty) {
-      queue.emplace(currentPosition.first, currentPosition.second + 1);
-      config.board[currentPosition.first][currentPosition.second + 1].parent = currentPosition;
-      config.board[currentPosition.first][currentPosition.second + 1].status = FieldStatus::Enqueued;
-    }
-    if (currentPosition.second - 1 >= 0 &&
-        config.board[currentPosition.first][currentPosition.second - 1].status == FieldStatus::Empty) {
-      queue.emplace(currentPosition.first, currentPosition.second - 1);
-      config.board[currentPosition.first][currentPosition.second - 1].parent = currentPosition;
-      config.board[currentPosition.first][currentPosition.second - 1].status = FieldStatus::Enqueued;
+      // przywracam pozycje wyjściowe
+      std::copy(std::begin(basePositions), std::end(basePositions), std::begin(currentCase.currentPositions));
     }
   }
 }
 
-void loadInputFromStdIn(Config &config);
+Config loadInputFromStdIn();
 
 int main(int argc, char * argv[]) {
 
-  Config config = std::move(loadInputFromStdIn());
+  Config config = loadInputFromStdIn();
   bfs(config);
 
-  for (auto i = config.solution.rbegin(); i != config.solution.rend(); ++i) {
-    std::cout << *i;
-  }
+  // for (auto i = config.solution.rbegin(); i != config.solution.rend(); ++i) {
+  //   std::cout << *i;
+  // }
   return 0;
 }
 
-void loadInputFromStdIn() {
+Config loadInputFromStdIn() {
   // params
   BoardDims dims;
   int robotCount;
@@ -258,29 +269,28 @@ void loadInputFromStdIn() {
         switch (robotCharId) {
           case 'a': {
             config.board[row][col].SetStatusesInorder(FieldStatus::Start, FieldStatus::Empty, FieldStatus::Empty);
-            config.board[row][col].SetParentsForAll('X');
-            config.startPositions[robotCharId - 'a'] = {row, col};
             break;
-          },
+          }
           case 'b': {
             config.board[row][col].SetStatusesInorder(FieldStatus::Empty, FieldStatus::Start, FieldStatus::Empty);
-            config.board[row][col].SetParentsForAll('X');
-            config.startPositions[robotCharId - 'a'] = {row, col};
             break;
-          },
+          }
           case 'c': {
             config.board[row][col].SetStatusesInorder(FieldStatus::Empty, FieldStatus::Empty, FieldStatus::Start);
-            config.board[row][col].SetParentsForAll('X');
-            config.startPositions[robotCharId - 'a'] = {row, col};
-          },
+            break;
+          }
           default: {
             std::cout << "Robot with unrecognized id!\n";
           }
+          config.board[row][col].SetParentsForAll('X');
+          config.startPositions[robotCharId - 'a'] = {row, col};
         }
       } else if (lineBuffer[col] >= 'A' && lineBuffer[col] <= 'Z') {
-        config.board[row][col].status = FieldStatus::Empty;
-        config.finishPoint = {row, col};
+        char robotCharId = lineBuffer[col];
+        config.finishPositions[robotCharId - 'A'] = {row, col};
+        config.board[row][col].SetStatusForAll(FieldStatus::Empty); // Todo: consider FieldStatus::Finish
       }
     }
   }
+  return config;
 }
