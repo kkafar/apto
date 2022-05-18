@@ -1,9 +1,10 @@
 #include <iostream>
 #include <vector>
+#include <array>
 #include <queue>
 
-constexpr static int MaxBoardSize = 200;
-constexpr static int ExpectedSolutionSize = 40;
+constexpr static int MaxBoardSize = 12;
+constexpr static int MaxRobotCount = 3;
 
 enum FieldStatus {
   Visited, Empty, Blocked, Start, Finish, Enqueued
@@ -15,8 +16,10 @@ double inline squaredDistance(const std::pair<int, int> &positionOne, const std:
 }
 
 struct BoardField {
-  FieldStatus status;
-  std::pair<int, int> parent;
+  std::array<FieldStatus, MaxRobotCount> statuses;
+//  std::array<std::pair<int, int>, MaxRobotCount> parents;
+  // rozważyć od razu uzupełnianie literkami (nie ma potrzeby potem tego odtwarzać)
+  std::array<char, MaxRobotCount> parents;
 };
 
 struct BoardDims {
@@ -30,8 +33,14 @@ struct Config {
   std::pair<int, int> startPoint;
   std::pair<int, int> finishPoint;
   int robotCount;
-  int minDistance;
+  double minDistance;
   int timeLimit;
+};
+
+struct Case {
+  BoardField board[MaxBoardSize][MaxBoardSize];
+  BoardDims dims;
+
 };
 
 void bfs(Config &config) {
